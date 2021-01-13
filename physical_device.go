@@ -35,7 +35,8 @@ func (d *PhysicalDevice) SatisfiesRequirements() bool {
 	return true
 }
 
-// score is used internally to select the best default device
+// score is used internally to select the best default device.
+// A higher score is better
 func (d *PhysicalDevice) score() int {
 	score := 0
 
