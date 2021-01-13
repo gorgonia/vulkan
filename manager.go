@@ -91,7 +91,8 @@ requiredCheck:
 	}
 
 optionalCheck:
-	for i, optionalExt := range m.optionalExtensions {
+	for i := 0; i < len(m.optionalExtensions); i++ {
+		optionalExt := m.optionalExtensions[i]
 		for _, availableExt := range availableExts {
 			if optionalExt == availableExt {
 				continue optionalCheck
@@ -101,6 +102,7 @@ optionalCheck:
 		m.optionalExtensions[i] = m.optionalExtensions[len(m.optionalExtensions)-1]
 		m.optionalExtensions[len(m.optionalExtensions)-1] = ""
 		m.optionalExtensions = m.optionalExtensions[:len(m.optionalExtensions)-1]
+		i--
 	}
 
 	return nil
@@ -123,7 +125,8 @@ requiredCheck:
 	}
 
 optionalCheck:
-	for i, optionalVL := range m.optionalValidationLayers {
+	for i := 0; i < len(m.optionalValidationLayers); i++ {
+		optionalVL := m.optionalValidationLayers[i]
 		for _, availableVL := range availableVLs {
 			if optionalVL == availableVL {
 				continue optionalCheck
@@ -133,6 +136,7 @@ optionalCheck:
 		m.optionalValidationLayers[i] = m.optionalValidationLayers[len(m.optionalValidationLayers)-1]
 		m.optionalValidationLayers[len(m.optionalValidationLayers)-1] = ""
 		m.optionalValidationLayers = m.optionalValidationLayers[:len(m.optionalValidationLayers)-1]
+		i--
 	}
 
 	return nil
@@ -233,6 +237,75 @@ func (m *Manager) createDebugCallback() error {
 	m.debugCallback = debugCallback
 
 	return nil
+}
+
+// AllPhysicalDevices lists all available Vulkan devices. Note that
+// the returned devices do not necessarily fulfill all Gorgonia's
+// requirements. If you need only supported devices, use
+// CompatiblePhysicalDevices instead
+func (m *Manager) AllPhysicalDevices() ([]*PhysicalDevice, error) {
+	var count uint32
+	res := vk.EnumeratePhysicalDevices(m.instance, &count, nil)
+	if res != vk.Success {
+		return nil, VulkanError(res)
+	}
+	devices := make([]vk.PhysicalDevice, count)
+	res = vk.EnumeratePhysicalDevices(m.instance, &count, devices)
+	if res != vk.Success {
+		return nil, VulkanError(res)
+	}
+	if len(devices) == 0 {
+		return nil, ErrNoVulkanPhysicalDevices
+	}
+
+	wrappers := make([]*PhysicalDevice, count)
+	for i, device := range devices {
+		wrappers[i] = newPhysicalDevice(device)
+	}
+	return wrappers, nil
+}
+
+// CompatiblePhysicalDevices lists all available Vulkan devices which
+// satisfy the requirements of Gorgonia
+func (m *Manager) CompatiblePhysicalDevices() ([]*PhysicalDevice, error) {
+	devices, err := m.AllPhysicalDevices()
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(devices); i++ {
+		device := devices[i]
+		if !device.SatisfiesRequirements() {
+			// Remove device from list
+			devices[i] = devices[len(devices)-1]
+			devices[len(devices)-1] = nil
+			devices = devices[:len(devices)-1]
+			i--
+		}
+	}
+	if len(devices) == 0 {
+		return nil, ErrNoCompatiblePhysicalDevices
+	}
+	return devices, nil
+}
+
+// DefaultPhysicalDevice returns a computing device/gpu that looks most promising
+// for use with Gorgonia. If you need to make a manual choice or want to use multiple
+// GPUs at once, use AllPhysicalDevices() or CompatiblePhysicalDevices() instead
+func (m *Manager) DefaultPhysicalDevice() (*PhysicalDevice, error) {
+	devices, err := m.CompatiblePhysicalDevices()
+	if err != nil {
+		return nil, err
+	}
+	var bestScore = MinInt
+	var bestDevice *PhysicalDevice
+	for _, device := range devices {
+		score := device.score()
+		if score > bestScore {
+			bestScore = score
+			bestDevice = device
+		}
+	}
+	return bestDevice, nil
 }
 
 func (m *Manager) Destroy() {
