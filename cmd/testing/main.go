@@ -40,6 +40,11 @@ func main() {
 	}
 	defer logicalDevice.Destroy()
 
+	//err = vulkan.Allocate(logicalDevice, 100*1024)
+	//if err != nil {
+	//	panic(err)
+	//}
+
 	fmt.Println()
 	fmt.Println("Hello Vulkan!")
 }

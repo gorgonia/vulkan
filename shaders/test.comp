@@ -1,0 +1,28 @@
+#version 450
+
+// https://www.khronos.org/opengl/wiki/Compute_Shader
+
+// Size of inputs that a single work group gets
+// See GL_MAX_COMPUTE_WORK_GROUP_COUNT
+// https://www.khronos.org/opengl/wiki/Compute_Shader#Limitations
+layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+//layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+// Descriptors
+layout(set = 0, binding = 0) readonly buffer Inp { int data[]; } inp;
+layout(set = 0, binding = 1) writeonly buffer Outp { int data[]; } outp;
+
+void main() {
+//    uint idx = gl_GlobalInvocationID.x;
+//    //    uint idy = gl_GlobalInvocationID.y;
+//
+//    uint part = inp.data.length() / gl_WorkGroupSize.x;
+//
+//    for (uint i = 0; i < inp.data.length(); i++) {
+//        outp.data[idx * part + i] = inp.data[idx * part + i];
+//    }
+////    outp.data[idx * part] = inp.data[idx * part];
+
+    uint index = gl_GlobalInvocationID.x;
+    outp.data[index] = inp.data[index];
+}

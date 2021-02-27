@@ -3,11 +3,20 @@ package vulkan
 import vk "github.com/vulkan-go/vulkan"
 
 type LogicalDevice struct {
-	device       vk.Device
-	computeQueue vk.Queue
+	physicalDevice          *PhysicalDevice
+	device                  vk.Device
+	computeQueueFamilyIndex uint32
+	computeQueue            vk.Queue
 }
 
 func createLogicalDeviceOnPhysicalDevice(pd *PhysicalDevice) (*LogicalDevice, error) {
+	// "We care about the queueFlags member which specifies what workloads can
+	//  execute on a particular queue. A naive way to do this would be to find
+	//  any queue that could handle compute workloads. A better approach would
+	//  be to find a queue that only handled compute workloads (but you need to
+	//  ignore the transfer bit and for our purposes the sparse binding bit too)."
+	//  - https://www.duskborn.com/posts/a-simple-vulkan-compute-example/
+
 	computeQueueFamilyIndex, err := pd.findQueueFamilyIndex(vk.QueueComputeBit)
 	if err != nil {
 		return nil, err
@@ -43,8 +52,10 @@ func createLogicalDeviceOnPhysicalDevice(pd *PhysicalDevice) (*LogicalDevice, er
 	vk.GetDeviceQueue(device, computeQueueFamilyIndex, 0, &computeQueue)
 
 	return &LogicalDevice{
-		device:       device,
-		computeQueue: computeQueue,
+		physicalDevice:          pd,
+		device:                  device,
+		computeQueueFamilyIndex: computeQueueFamilyIndex,
+		computeQueue:            computeQueue,
 	}, nil
 }
 
