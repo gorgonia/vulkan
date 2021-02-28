@@ -125,16 +125,16 @@ func (a *algorithm) createParameters(params []tensor.Tensor) error {
 
 	descriptorBufferInfos := make([]vk.DescriptorBufferInfo, len(params))
 	for i, param := range params {
-		dense, ok := param.(*Dense)
-		if ! ok {
-			panic("tensor type is not compatible")
+		mem, err := MemoryFromTensor(param)
+		if err != nil {
+			return err
 		}
 
-		// TODO: move this to Dense/tensor
+		// TODO: move this to Memory
 		descriptorBufferInfos[i] = vk.DescriptorBufferInfo{
-			Buffer: dense.buffer,
+			Buffer: mem.buffer,
 			Offset: 0,
-			Range:  dense.size,
+			Range:  mem.size,
 		}
 	}
 	writeDescriptorSet := []vk.WriteDescriptorSet{

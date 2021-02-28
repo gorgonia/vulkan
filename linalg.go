@@ -36,39 +36,39 @@ func (e *Engine) checkThreeFloat(a, b, ret tensor.Tensor) (ad, bd, retVal *tenso
 	return
 }
 
-func (e *Engine) MatMul(a, b, prealloc tensor.Tensor) (err error) {
-	var ad, bd, pd *tensor.Dense
-	if ad, bd, pd, err = e.checkThreeFloat(a, b, prealloc); err != nil {
-		return errors.Wrapf(err, "MatVecMul failed pre check")
-	}
-
-	ado := a.DataOrder()
-	bdo := b.DataOrder()
-	if !ado.HasSameOrder(bdo) {
-		return errors.Errorf("a does not have the same data order as b, a is %v. b is %v", a.DataOrder(), b.DataOrder())
-	}
-
-	// Get result shape. k is the shared dimension
-	// a is (m, k)
-	// b is (k, n)
-	// c is (m, n)
-	var m, n, k int
-	m = ad.Shape()[0]
-	n = ad.Shape()[1]
-	k = bd.Shape()[1]
-
-	// TODO: check data order
-
-	if !(ado.IsRowMajor() && bdo.IsRowMajor()) {
-		panic("other data orders not implemented yet")
-	}
-
-	if err := e.evalAsync(newOpMatMul(e), ad, bd, pd); err != nil {
-		return err
-	}
-
-	return nil
-}
+//func (e *Engine) MatMul(a, b, prealloc tensor.Tensor) (err error) {
+//	var ad, bd, pd *tensor.Dense
+//	if ad, bd, pd, err = e.checkThreeFloat(a, b, prealloc); err != nil {
+//		return errors.Wrapf(err, "MatVecMul failed pre check")
+//	}
+//
+//	ado := a.DataOrder()
+//	bdo := b.DataOrder()
+//	if !ado.HasSameOrder(bdo) {
+//		return errors.Errorf("a does not have the same data order as b, a is %v. b is %v", a.DataOrder(), b.DataOrder())
+//	}
+//
+//	// Get result shape. k is the shared dimension
+//	// a is (m, k)
+//	// b is (k, n)
+//	// c is (m, n)
+//	var m, n, k int
+//	m = ad.Shape()[0]
+//	n = ad.Shape()[1]
+//	k = bd.Shape()[1]
+//
+//	// TODO: check data order
+//
+//	if !(ado.IsRowMajor() && bdo.IsRowMajor()) {
+//		panic("other data orders not implemented yet")
+//	}
+//
+//	if err := e.evalAsync(newOpMatMul(e), ad, bd, pd); err != nil {
+//		return err
+//	}
+//
+//	return nil
+//}
 
 type opMatMul struct {
 	opAlgorithmBase
@@ -85,6 +85,8 @@ func (op *opMatMul) Init(params []tensor.Tensor) error {
 }
 
 func (op *opMatMul) Record() error {
-	// TODO
+	// TODO: record memory buffer barriers
+	// TODO: optimize workgroup size
+	op.algorithm.recordDispatch(1, 1, 1)
 	return nil
 }

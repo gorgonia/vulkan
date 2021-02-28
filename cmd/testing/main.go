@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/gorgonia/vulkan"
+	"gorgonia.org/tensor"
 )
 
 func main() {
@@ -34,16 +35,15 @@ func main() {
 		}
 	}
 
-	logicalDevice, err := defaultDevice.NewLogicalDevice()
+	engine, err := vulkan.NewEngine(defaultDevice)
 	if err != nil {
 		panic(err)
 	}
-	defer logicalDevice.Destroy()
+	defer engine.Destroy()
 
-	//err = vulkan.Allocate(logicalDevice, 100*1024)
-	//if err != nil {
-	//	panic(err)
-	//}
+	a := tensor.New(tensor.WithShape(256, 256), tensor.WithEngine(engine), tensor.Of(tensor.Float64))
+
+	defer engine.FreeTensor(a)
 
 	fmt.Println()
 	fmt.Println("Hello Vulkan!")

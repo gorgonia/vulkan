@@ -243,7 +243,7 @@ func (m *Manager) createDebugCallback() error {
 // the returned devices do not necessarily fulfill all Gorgonia's
 // requirements. If you need only supported devices, use
 // CompatiblePhysicalDevices instead
-func (m *Manager) AllPhysicalDevices() ([]*PhysicalDevice, error) {
+func (m *Manager) AllPhysicalDevices() ([]*Device, error) {
 	var count uint32
 	res := vk.EnumeratePhysicalDevices(m.instance, &count, nil)
 	if res != vk.Success {
@@ -258,16 +258,16 @@ func (m *Manager) AllPhysicalDevices() ([]*PhysicalDevice, error) {
 		return nil, ErrNoVulkanPhysicalDevices
 	}
 
-	wrappers := make([]*PhysicalDevice, count)
+	wrappers := make([]*Device, count)
 	for i, device := range devices {
-		wrappers[i] = newPhysicalDevice(device)
+		wrappers[i] = newDevice(device)
 	}
 	return wrappers, nil
 }
 
 // CompatiblePhysicalDevices lists all available Vulkan devices which
 // satisfy the requirements of Gorgonia
-func (m *Manager) CompatiblePhysicalDevices() ([]*PhysicalDevice, error) {
+func (m *Manager) CompatiblePhysicalDevices() ([]*Device, error) {
 	devices, err := m.AllPhysicalDevices()
 	if err != nil {
 		return nil, err
@@ -291,13 +291,13 @@ func (m *Manager) CompatiblePhysicalDevices() ([]*PhysicalDevice, error) {
 // DefaultPhysicalDevice returns a computing device/gpu that looks most promising
 // for use with Gorgonia. If you need to make a manual choice or want to use multiple
 // GPUs at once, use AllPhysicalDevices() or CompatiblePhysicalDevices() instead
-func (m *Manager) DefaultPhysicalDevice() (*PhysicalDevice, error) {
+func (m *Manager) DefaultPhysicalDevice() (*Device, error) {
 	devices, err := m.CompatiblePhysicalDevices()
 	if err != nil {
 		return nil, err
 	}
 	var bestScore = MinInt
-	var bestDevice *PhysicalDevice
+	var bestDevice *Device
 	for _, device := range devices {
 		score := device.score()
 		if score > bestScore {

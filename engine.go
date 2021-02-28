@@ -7,14 +7,22 @@ import (
 )
 
 type Engine struct {
-	tensor.Engine
-
-	physicalDevice          vk.PhysicalDevice // Physical device the logical device is on, can be used to get all kind of specs but not much more
-	device                  vk.Device         // Logical device, can be used to control the device
-	computeQueue            vk.Queue          // Queue to run commands on
-	computeQueueFamilyIndex uint32            // Family from which the computeQueue was created
-
+	logicalDevice
 	sequence sequence
+}
+
+func NewEngine(pd *Device) (*Engine, error) {
+	ld, err := newLogicalDeviceOnPhysicalDevice(pd)
+	if err != nil {
+		return nil, err
+	}
+	return &Engine{
+		logicalDevice: ld,
+	}, nil
+}
+
+func (e *Engine) Destroy() {
+	e.logicalDevice.Destroy()
 }
 
 func (e *Engine) evalAsync(op Op, tensors ...tensor.Tensor) error {
@@ -105,6 +113,9 @@ func (e *Engine) Free(mem tensor.Memory, size int64) error {
 	if m.pointer == nil {
 		return ErrMemoryAlreadyFreed
 	}
+	if m.size != vk.DeviceSize(size) {
+		return ErrPartialMemoryFreeNotSupported
+	}
 
 	vk.UnmapMemory(e.device, m.memory)
 	vk.DestroyBuffer(e.device, m.buffer, nil)
@@ -116,6 +127,14 @@ func (e *Engine) Free(mem tensor.Memory, size int64) error {
 	m.size = 0
 
 	return nil
+}
+
+func (e *Engine) FreeTensor(t tensor.Tensor) error {
+	mem, err := MemoryFromTensor(t)
+	if err != nil {
+		return err
+	}
+	return e.Free(mem, int64(mem.size))
 }
 
 func (e *Engine) Memset(mem tensor.Memory, val interface{}) error {
@@ -146,18 +165,27 @@ func (e *Engine) NonStdAlloc() {
 }
 
 type Memory struct {
-	tensor.Memory
-
 	memory  vk.DeviceMemory
 	buffer  vk.Buffer
 	pointer unsafe.Pointer
 	size    vk.DeviceSize
 }
 
+// Uintptr returns the pointer to the Memory struct itself. The Vulkan engine
+// manually manages memory so Tensor shouldn't touch this. If accessible memory
+// is needed, use engine.Accessible()
 func (m *Memory) Uintptr() uintptr {
-	return uintptr(m.pointer)
+	return uintptr(unsafe.Pointer(m))
 }
 
 func (m *Memory) MemSize() uintptr {
-	return uintptr(m.size)
+	panic("not implemented")
+}
+
+func MemoryFromTensor(t tensor.Tensor) (*Memory, error) {
+	if _, ok := t.Engine().(*Engine); !ok {
+		return nil, ErrMemoryManagedByOtherEngine
+	}
+	mem := (*Memory)(unsafe.Pointer(t.Uintptr()))
+	return mem, nil
 }
