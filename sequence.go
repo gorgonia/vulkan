@@ -10,6 +10,17 @@ type sequence struct {
 
 	commandPool   vk.CommandPool
 	commandBuffer vk.CommandBuffer
+	fence vk.Fence
+}
+
+func newSequence(e *Engine) (sequence, error) {
+	s := sequence{
+		engine: e,
+	}
+	if err := s.init(); err != nil {
+		return sequence{}, err
+	}
+	return s, nil
 }
 
 func (s *sequence) init() error {
@@ -20,6 +31,11 @@ func (s *sequence) init() error {
 		return err
 	}
 	return nil
+}
+
+func (s *sequence) destroy() {
+	vk.FreeCommandBuffers(s.engine.device, s.commandPool, 1, []vk.CommandBuffer{s.commandBuffer})
+	vk.DestroyCommandPool(s.engine.device, s.commandPool, nil)
 }
 
 func (s *sequence) createCommandPool() error {
@@ -78,7 +94,17 @@ func (s *sequence) record(op Op, params ...tensor.Tensor) error {
 	return nil
 }
 
-func (s *sequence) evalAsync() error {
+func (s *sequence) evalSync() error {
+	if err := s.evalAsync(true); err != nil {
+		return err
+	}
+	if err := s.await(1000000000); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *sequence) evalAsync(createFence bool) error {
 	submitInfo := vk.SubmitInfo{
 		SType:                vk.StructureTypeSubmitInfo,
 		WaitSemaphoreCount:   0,
@@ -89,7 +115,34 @@ func (s *sequence) evalAsync() error {
 		SignalSemaphoreCount: 0,
 		PSignalSemaphores:    nil,
 	}
-	// TODO: add fence
-	res := vk.QueueSubmit(s.engine.computeQueue, 1, []vk.SubmitInfo{submitInfo}, vk.NullFence)
-	return VulkanError(res)
+
+	if createFence {
+		fenceInfo := vk.FenceCreateInfo{
+			SType: vk.StructureTypeFenceCreateInfo,
+		}
+		var fence vk.Fence
+		res := vk.CreateFence(s.engine.device, &fenceInfo, nil, &fence)
+		if res != vk.Success {
+			return VulkanError(res)
+		}
+		s.fence = fence
+	}
+
+	res := vk.QueueSubmit(s.engine.computeQueue, 1, []vk.SubmitInfo{submitInfo}, s.fence)
+	if res != vk.Success {
+		return VulkanError(res)
+	}
+	return nil
+}
+
+// await the eval to be finished, timeout after waitFor nanoseconds
+func (s *sequence) await(waitFor uint64) error {
+	res := vk.WaitForFences(s.engine.device, 1, []vk.Fence{s.fence}, vk.True, waitFor)
+	if res != vk.Success {
+		return VulkanError(res)
+	}
+	vk.DestroyFence(s.engine.device, s.fence, nil)
+	s.fence = nil
+
+	return nil
 }

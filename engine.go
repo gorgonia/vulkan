@@ -9,19 +9,27 @@ import (
 type Engine struct {
 	logicalDevice
 	sequence sequence
+
+	buffers map[unsafe.Pointer]*buffer
 }
 
 func NewEngine(pd *Device) (*Engine, error) {
-	ld, err := newLogicalDeviceOnPhysicalDevice(pd)
-	if err != nil {
+	e := Engine{
+		buffers: make(map[unsafe.Pointer]*buffer),
+	}
+	var err error
+	if e.logicalDevice, err = newLogicalDeviceOnPhysicalDevice(pd); err != nil {
 		return nil, err
 	}
-	return &Engine{
-		logicalDevice: ld,
-	}, nil
+	if e.sequence, err = newSequence(&e); err != nil {
+		e.logicalDevice.Destroy()
+		return nil, err
+	}
+	return &e, nil
 }
 
 func (e *Engine) Destroy() {
+	e.sequence.destroy()
 	e.logicalDevice.Destroy()
 }
 
@@ -35,7 +43,23 @@ func (e *Engine) evalAsync(op Op, tensors ...tensor.Tensor) error {
 	if err := e.sequence.end(); err != nil {
 		return err
 	}
-	if err := e.sequence.evalAsync(); err != nil {
+	if err := e.sequence.evalAsync(true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e *Engine) evalSync(op Op, tensors ...tensor.Tensor) error {
+	if err := e.sequence.begin(); err != nil {
+		return err
+	}
+	if err := e.sequence.record(op, tensors...); err != nil {
+		return err
+	}
+	if err := e.sequence.end(); err != nil {
+		return err
+	}
+	if err := e.sequence.evalSync(); err != nil {
 		return err
 	}
 	return nil
@@ -56,18 +80,18 @@ func (e *Engine) Alloc(size int64) (tensor.Memory, error) {
 		QueueFamilyIndexCount: 1,
 		PQueueFamilyIndices:   []uint32{e.computeQueueFamilyIndex},
 	}
-	var buffer vk.Buffer
-	res := vk.CreateBuffer(e.device, &bufferInfo, nil, &buffer)
+	var buf vk.Buffer
+	res := vk.CreateBuffer(e.device, &bufferInfo, nil, &buf)
 	if res != vk.Success {
 		return nil, VulkanError(res)
 	}
 
 	// Find memory requirements
 	var requirements vk.MemoryRequirements
-	vk.GetBufferMemoryRequirements(e.device, buffer, &requirements)
+	vk.GetBufferMemoryRequirements(e.device, buf, &requirements)
 	requirements.Deref()
 
-	memoryTypeIndex, err := findMemoryTypeIndex(e.physicalDevice, requirements, dSize)
+	memoryTypeIndex, err := findMemoryTypeIndex(e.physicalDevice, requirements, dSize) // TODO: change memory type depending on where we want to store the buffer
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +109,7 @@ func (e *Engine) Alloc(size int64) (tensor.Memory, error) {
 	}
 
 	// Bind buffer to memory
-	res = vk.BindBufferMemory(e.device, buffer, memory, 0)
+	res = vk.BindBufferMemory(e.device, buf, memory, 0)
 	if res != vk.Success {
 		return nil, VulkanError(res)
 	}
@@ -97,44 +121,45 @@ func (e *Engine) Alloc(size int64) (tensor.Memory, error) {
 		return nil, VulkanError(res)
 	}
 
-	return &Memory{
-		memory:  memory,
-		buffer:  buffer,
-		pointer: pointer,
-		size:    dSize,
-	}, nil
+	//fmt.Printf("mem: %p buf %p", memory, buffer)
+
+	// Store handles
+	handles := &buffer{
+		memory: memory,
+		buffer: buf,
+		size:   dSize,
+	}
+	//e.buffers[unsafe.Pointer(handles)] = handles // For host-inaccessible memory
+	e.buffers[pointer] = handles // For accessible memory
+
+	//return PointerWrapper(unsafe.Pointer(handles)), nil
+	return PointerWrapper(pointer), nil
 }
 
 func (e *Engine) Free(mem tensor.Memory, size int64) error {
-	m, ok := mem.(*Memory)
-	if !ok {
-		return ErrFreeMemoryOfOtherEngine
+	bufPtr, err := e.handlesFromMemory(mem)
+	if err != nil {
+		return err
 	}
-	if m.pointer == nil {
-		return ErrMemoryAlreadyFreed
-	}
-	if m.size != vk.DeviceSize(size) {
+	if bufPtr.size != vk.DeviceSize(size) {
 		return ErrPartialMemoryFreeNotSupported
 	}
 
-	vk.UnmapMemory(e.device, m.memory)
-	vk.DestroyBuffer(e.device, m.buffer, nil)
-	vk.FreeMemory(e.device, m.memory, nil)
+	vk.UnmapMemory(e.device, bufPtr.memory)
+	vk.DestroyBuffer(e.device, bufPtr.buffer, nil)
+	vk.FreeMemory(e.device, bufPtr.memory, nil)
 
-	m.memory = vk.NullDeviceMemory
-	m.buffer = vk.NullBuffer
-	m.pointer = nil
-	m.size = 0
+	delete(e.buffers, unsafe.Pointer(mem.Uintptr()))
 
 	return nil
 }
 
 func (e *Engine) FreeTensor(t tensor.Tensor) error {
-	mem, err := MemoryFromTensor(t)
+	mem, err := e.memoryFromTensor(t)
 	if err != nil {
 		return err
 	}
-	return e.Free(mem, int64(mem.size))
+	return e.Free(mem, int64(t.MemSize()))
 }
 
 func (e *Engine) Memset(mem tensor.Memory, val interface{}) error {
@@ -164,28 +189,45 @@ func (e Engine) WorksWith(order tensor.DataOrder) bool {
 func (e *Engine) NonStdAlloc() {
 }
 
-type Memory struct {
-	memory  vk.DeviceMemory
-	buffer  vk.Buffer
-	pointer unsafe.Pointer
-	size    vk.DeviceSize
+func (e *Engine) memoryFromTensor(t tensor.Tensor) (tensor.Memory, error) {
+	if e != t.Engine() {
+		return nil, ErrMemoryManagedByOtherEngine
+	}
+	return PointerWrapper(t.Uintptr()), nil
 }
 
-// Uintptr returns the pointer to the Memory struct itself. The Vulkan engine
-// manually manages memory so Tensor shouldn't touch this. If accessible memory
-// is needed, use engine.Accessible()
-func (m *Memory) Uintptr() uintptr {
-	return uintptr(unsafe.Pointer(m))
+func (e *Engine) handlesFromTensor(t tensor.Tensor) (*buffer, error) {
+	mem, err := e.memoryFromTensor(t)
+	if err != nil {
+		return nil, err
+	}
+	return e.handlesFromMemory(mem)
 }
 
-func (m *Memory) MemSize() uintptr {
+func (e *Engine) handlesFromMemory(mem tensor.Memory) (*buffer, error) {
+	// Our map contains a valid reference to the buffer so this cast
+	// should be ok. The GC may panic if an invalid pointer or previously
+	// freed pointer is passed to this function.
+	bufPtr := unsafe.Pointer(mem.Uintptr())
+	if b, ok := e.buffers[bufPtr]; ok {
+		return b, nil
+	}
+	return nil, ErrUnknownMemory
+}
+
+type PointerWrapper uintptr
+
+func (p PointerWrapper) MemSize() uintptr {
 	panic("not implemented")
 }
 
-func MemoryFromTensor(t tensor.Tensor) (*Memory, error) {
-	if _, ok := t.Engine().(*Engine); !ok {
-		return nil, ErrMemoryManagedByOtherEngine
-	}
-	mem := (*Memory)(unsafe.Pointer(t.Uintptr()))
-	return mem, nil
+// Uintptr returns the wrapped uintptr
+func (p PointerWrapper) Uintptr() uintptr {
+	return uintptr(p)
+}
+
+type buffer struct {
+	memory vk.DeviceMemory
+	buffer vk.Buffer
+	size   vk.DeviceSize
 }

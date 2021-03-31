@@ -22,6 +22,15 @@ func newDevice(device vk.PhysicalDevice) *Device {
 	properties.Deref()
 	d.properties = properties
 
+	//d.properties.Limits.Deref()
+	//fmt.Println(
+	//	d.Name(),
+	//	d.properties.Limits.MaxComputeWorkGroupCount,
+	//	d.properties.Limits.MaxComputeWorkGroupInvocations,
+	//	d.properties.Limits.MaxComputeWorkGroupSize,
+	//	d.properties.Limits.MaxComputeSharedMemorySize,
+	//)
+
 	var familyCount uint32
 	vk.GetPhysicalDeviceQueueFamilyProperties(device, &familyCount, nil)
 	families := make([]vk.QueueFamilyProperties, familyCount)
@@ -107,12 +116,13 @@ func newLogicalDeviceOnPhysicalDevice(pd *Device) (logicalDevice, error) {
 		QueueCount:       1,
 		PQueuePriorities: []float32{1.0},
 	}
-	var deviceFeatures []vk.PhysicalDeviceFeatures
+	var deviceFeatures vk.PhysicalDeviceFeatures
+	deviceFeatures.ShaderFloat64 = vk.Bool32(1) // TODO: check that it is actually available on the device, and maybe enable it optionally
 	deviceCreateInfo := &vk.DeviceCreateInfo{
 		SType:                vk.StructureTypeDeviceCreateInfo,
 		PQueueCreateInfos:    []vk.DeviceQueueCreateInfo{queueCreateInfo},
 		QueueCreateInfoCount: 1,
-		PEnabledFeatures:     deviceFeatures,
+		PEnabledFeatures:     []vk.PhysicalDeviceFeatures{deviceFeatures},
 		// TODO: add extensions and validation layers
 	}
 

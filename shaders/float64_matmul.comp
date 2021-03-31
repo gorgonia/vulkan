@@ -1,0 +1,24 @@
+#version 450
+
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) readonly buffer MatA { double data[]; } matrix_a;
+layout(set = 0, binding = 1) readonly buffer MatB { double data[]; } matrix_b;
+layout(set = 0, binding = 2) writeonly buffer MatOut { double data[]; } matrix_out;
+
+layout(push_constant) uniform PushConstants {
+    uint m; // MatA's number of rows
+    uint k; // MatA's number of columns and MatB's number of rows
+    uint n; // MatB's number of columns
+};
+
+void main() {
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+
+    double result = 0.0;
+    for (uint i = 0; i < k; i++) {
+        result += matrix_a.data[y * k + i] * matrix_b.data[x + i * n];
+    }
+    matrix_out.data[y * n + x] = result;
+}

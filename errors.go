@@ -11,8 +11,7 @@ var ErrNoCompatiblePhysicalDevices = errors.New("failed to find GPUs with Vulkan
 var ErrQueueFamilyNotFound = errors.New("could not find required queue family on this device")
 var ErrNoMatchingPhysicalDeviceMemory = errors.New("could not find a memory type that matches the requirements")
 var ErrMemoryManagedByOtherEngine = errors.New("this tensor's memory is not managed by Gorgonia's Vulkan engine")
-var ErrFreeMemoryOfOtherEngine = errors.New("cannot free memory allocated by another engine")
-var ErrMemoryAlreadyFreed = errors.New("cannot free memory that has been freed before")
+var ErrUnknownMemory = errors.New("the memory is not known to this engine")
 var ErrSpirvDataNotMultipleOf4Bytes = errors.New("the loaded SPIR-V data must have a length that is a multiple of 4 bytes")
 var ErrPartialMemoryFreeNotSupported = errors.New("freeing only a part, or more than the size of memory is not supported")
 

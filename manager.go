@@ -281,6 +281,10 @@ func (m *Manager) CompatiblePhysicalDevices() ([]*Device, error) {
 			devices = devices[:len(devices)-1]
 			i--
 		}
+		//var features vk.PhysicalDeviceFeatures
+		//vk.GetPhysicalDeviceFeatures(device.device, &features)
+		//features.Deref()
+		//fmt.Println(device.Name(), features.ShaderFloat64)
 	}
 	if len(devices) == 0 {
 		return nil, ErrNoCompatiblePhysicalDevices

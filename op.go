@@ -3,14 +3,17 @@ package vulkan
 import (
 	vk "github.com/vulkan-go/vulkan"
 	"gorgonia.org/tensor"
+	"unsafe"
 )
 
 type spirvData []uint32
 
 const spirvSliceToByteSize = 4 // num of bytes in a uint32
+const pushConstantByteSize = 4 // num of bytes in a float32, used for push constants
 
 type Op interface {
 	Init(params []tensor.Tensor) error
+	Destroy()
 	Record() error
 }
 
@@ -33,8 +36,13 @@ func (op *opAlgorithmBase) init(shaderFilePath string, params ...tensor.Tensor) 
 	return op.algorithm.init(shaderFileData, params)
 }
 
+func (op *opAlgorithmBase) destroy() {
+	op.algorithm.destroy()
+}
+
 type algorithm struct {
-	e *Engine
+	e             *Engine
+	pushConstants []int32
 
 	shaderModule        vk.ShaderModule
 	descriptorPool      vk.DescriptorPool
@@ -62,6 +70,12 @@ func (a *algorithm) init(shaderFileData spirvData, params []tensor.Tensor) error
 		return err
 	}
 	return nil
+}
+
+func (a *algorithm) destroy() {
+	a.destroyPipeline()
+	a.destroyShaderModule()
+	a.destroyParameters()
 }
 
 func (a *algorithm) createParameters(params []tensor.Tensor) error {
@@ -125,16 +139,16 @@ func (a *algorithm) createParameters(params []tensor.Tensor) error {
 
 	descriptorBufferInfos := make([]vk.DescriptorBufferInfo, len(params))
 	for i, param := range params {
-		mem, err := MemoryFromTensor(param)
+		hndls, err := a.e.handlesFromTensor(param)
 		if err != nil {
 			return err
 		}
 
 		// TODO: move this to Memory
 		descriptorBufferInfos[i] = vk.DescriptorBufferInfo{
-			Buffer: mem.buffer,
+			Buffer: hndls.buffer,
 			Offset: 0,
-			Range:  mem.size,
+			Range:  hndls.size,
 		}
 	}
 	writeDescriptorSet := []vk.WriteDescriptorSet{
@@ -153,6 +167,11 @@ func (a *algorithm) createParameters(params []tensor.Tensor) error {
 	return nil
 }
 
+func (a *algorithm) destroyParameters() {
+	vk.DestroyDescriptorSetLayout(a.e.device, a.descriptorSetLayout, nil)
+	vk.DestroyDescriptorPool(a.e.device, a.descriptorPool, nil)
+}
+
 func (a *algorithm) createShaderModule(shaderFileData spirvData) error {
 	shaderModuleCreateInfo := vk.ShaderModuleCreateInfo{
 		SType:    vk.StructureTypeShaderModuleCreateInfo,
@@ -168,6 +187,10 @@ func (a *algorithm) createShaderModule(shaderFileData spirvData) error {
 	return nil
 }
 
+func (a *algorithm) destroyShaderModule() {
+	vk.DestroyShaderModule(a.e.device, a.shaderModule, nil)
+}
+
 func (a *algorithm) createPipeline() error {
 	pipelineLayoutInfo := vk.PipelineLayoutCreateInfo{
 		SType:                  vk.StructureTypePipelineLayoutCreateInfo,
@@ -176,6 +199,18 @@ func (a *algorithm) createPipeline() error {
 		PushConstantRangeCount: 0,
 		PPushConstantRanges:    nil,
 	}
+
+	if len(a.pushConstants) > 0 {
+		pipelineLayoutInfo.PushConstantRangeCount = 1
+		pipelineLayoutInfo.PPushConstantRanges = []vk.PushConstantRange{
+			{
+				StageFlags: vk.ShaderStageFlags(vk.ShaderStageComputeBit),
+				Offset:     0,
+				Size:       uint32(pushConstantByteSize * len(a.pushConstants)),
+			},
+		}
+	}
+
 	var pipelineLayout vk.PipelineLayout
 	res := vk.CreatePipelineLayout(a.e.device, &pipelineLayoutInfo, nil, &pipelineLayout)
 	if res != vk.Success {
@@ -212,8 +247,28 @@ func (a *algorithm) createPipeline() error {
 	return nil
 }
 
+func (a *algorithm) destroyPipeline() {
+	vk.DestroyPipeline(a.e.device, a.pipeline, nil)
+	vk.DestroyPipelineLayout(a.e.device, a.pipelineLayout, nil)
+}
+
 func (a *algorithm) recordDispatch(x uint32, y uint32, z uint32) {
+	// recordBindCore
 	vk.CmdBindPipeline(a.e.sequence.commandBuffer, vk.PipelineBindPointCompute, a.pipeline)
 	vk.CmdBindDescriptorSets(a.e.sequence.commandBuffer, vk.PipelineBindPointCompute, a.pipelineLayout, 0, 1, []vk.DescriptorSet{a.descriptorSet}, 0, nil)
+
+	// recordBindPush
+	if len(a.pushConstants) > 0 {
+		vk.CmdPushConstants(
+			a.e.sequence.commandBuffer,
+			a.pipelineLayout,
+			vk.ShaderStageFlags(vk.ShaderStageComputeBit),
+			0,
+			uint32(pushConstantByteSize * len(a.pushConstants)),
+			unsafe.Pointer(&a.pushConstants[0]),
+		)
+	}
+
+	// recordDispatch
 	vk.CmdDispatch(a.e.sequence.commandBuffer, x, y, z)
 }
