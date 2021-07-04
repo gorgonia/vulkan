@@ -27,15 +27,18 @@ func TestMain(m *testing.M) {
 	}
 
 	testingEngine, err = vulkan.NewEngine(device)
+	if err != nil {
+		panic(err)
+	}
 
 	os.Exit(m.Run())
 }
 
 func TestTensor_ArrayFuncs(t *testing.T) {
-	a := tensor.New(tensor.WithShape(3, 2), tensor.WithEngine(testingEngine), tensor.Of(tensor.Float64))
+	a := tensor.New(tensor.WithShape(3, 2), tensor.WithEngine(testingEngine), tensor.Of(tensor.Float32))
 	defer testingEngine.FreeTensor(a)
 
 	assert.Equal(t, 6, a.Size())
 	assert.Equal(t, 6, a.Cap())
-	assert.Equal(t, uintptr(6 * 8), a.MemSize())
+	assert.Equal(t, uintptr(6*4), a.MemSize())
 }
