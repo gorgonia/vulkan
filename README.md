@@ -1,6 +1,17 @@
 # Vulkan back-end for Gorgonia
 
+[![GoDoc](https://godoc.org/gorgonia.org/vulkan?status.svg)](https://godoc.org/gorgonia.org/vulkan)
+[![GitHub version](https://badge.fury.io/gh/gorgonia%2Fvulkan.svg)](https://badge.fury.io/gh/gorgonia%2Fvulkan)
+[![Go with Vulkan](https://github.com/gorgonia/vulkan/actions/workflows/go-vulkan.yml/badge.svg)](https://github.com/gorgonia/vulkan/actions/workflows/go-vulkan.yml)
+[![codecov](https://codecov.io/gh/gorgonia/vulkan/branch/master/graph/badge.svg)](https://codecov.io/gh/gorgonia/vulkan)
+[![Go Report Card](https://goreportcard.com/badge/gorgonia.org/vulkan)](https://goreportcard.com/report/gorgonia.org/vulkan)
+[![experimental](http://badges.github.io/stability-badges/dist/experimental.svg)](http://github.com/badges/stability-badges)
+
 This project is in the early development stage.
+
+## Licence
+This package can be used under the same license as the main Gorgonia package:<br>
+https://github.com/gorgonia/gorgonia#licence
 
 ## Dependencies
 |Package|Used For|Vitality|Notes|Licence|
