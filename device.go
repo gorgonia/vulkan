@@ -117,7 +117,7 @@ func newLogicalDeviceOnPhysicalDevice(pd *Device) (logicalDevice, error) {
 		PQueuePriorities: []float32{1.0},
 	}
 	var deviceFeatures vk.PhysicalDeviceFeatures
-	deviceFeatures.ShaderFloat64 = vk.Bool32(1) // TODO: check that it is actually available on the device, and maybe enable it optionally
+	//deviceFeatures.ShaderFloat64 = vk.Bool32(1) // TODO: enable it with a flag, and check that it is available for the device
 	deviceCreateInfo := &vk.DeviceCreateInfo{
 		SType:                vk.StructureTypeDeviceCreateInfo,
 		PQueueCreateInfos:    []vk.DeviceQueueCreateInfo{queueCreateInfo},

@@ -74,7 +74,7 @@ func (e *Engine) MatMul(a, b, prealloc tensor.Tensor) (err error) {
 
 type opMatMul struct {
 	opAlgorithmBase
-	params []tensor.Tensor
+	params     []tensor.Tensor
 	pushConsts []float32
 }
 
@@ -95,7 +95,7 @@ func (op *opMatMul) Init(params []tensor.Tensor) error {
 	}
 	op.params = params
 
-	return op.opAlgorithmBase.init("shaders/compiled/float64_matmul.spv", params...)
+	return op.opAlgorithmBase.init("shaders/compiled/float32_matmul.spv", params...)
 }
 
 func (op *opMatMul) Destroy() {
@@ -109,6 +109,7 @@ func (op *opMatMul) Record() error {
 
 	// TODO: optimize workgroup size
 	//op.algorithm.recordDispatch(256 / 32, 256 / 32, 1)
-	op.algorithm.recordDispatch(uint32(op.params[1].Shape()[1]) / 32, uint32(op.params[0].Shape()[0]) / 32, 1)
+	//op.algorithm.recordDispatch(uint32(op.params[1].Shape()[1]) / 32, uint32(op.params[0].Shape()[0]) / 32, 1)
+	op.algorithm.recordDispatch(uint32(op.params[1].Shape()[1])/16, uint32(op.params[0].Shape()[0])/16, 1)
 	return nil
 }

@@ -10,7 +10,7 @@ type sequence struct {
 
 	commandPool   vk.CommandPool
 	commandBuffer vk.CommandBuffer
-	fence vk.Fence
+	fence         vk.Fence
 }
 
 func newSequence(e *Engine) (sequence, error) {

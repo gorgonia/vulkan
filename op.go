@@ -264,7 +264,7 @@ func (a *algorithm) recordDispatch(x uint32, y uint32, z uint32) {
 			a.pipelineLayout,
 			vk.ShaderStageFlags(vk.ShaderStageComputeBit),
 			0,
-			uint32(pushConstantByteSize * len(a.pushConstants)),
+			uint32(pushConstantByteSize*len(a.pushConstants)),
 			unsafe.Pointer(&a.pushConstants[0]),
 		)
 	}

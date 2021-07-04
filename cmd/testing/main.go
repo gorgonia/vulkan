@@ -18,22 +18,9 @@ func main() {
 	}
 	defer m.Destroy()
 
-	devices, err := m.AllPhysicalDevices()
-	if err != nil {
-		panic(err)
-	}
 	defaultDevice, err := m.DefaultPhysicalDevice()
 	if err != nil {
 		panic(err)
-	}
-	fmt.Println("=== Devices ===")
-	for _, device := range devices {
-		fmt.Printf("- name:        %s\n", device.Name())
-		fmt.Printf("  api version: %s\n", device.ApiVersion())
-		fmt.Printf("  compatible:  %t\n", device.SatisfiesRequirements())
-		if device.Name() == defaultDevice.Name() {
-			fmt.Println("  (default)")
-		}
 	}
 
 	engine, err := vulkan.NewEngine(defaultDevice)
@@ -45,17 +32,17 @@ func main() {
 	//e := tensor.StdEng{}
 	e := engine
 
-	a := tensor.New(tensor.WithShape(256, 256), tensor.WithEngine(e), tensor.Of(tensor.Float64))
+	a := tensor.New(tensor.WithShape(256, 256), tensor.WithEngine(e), tensor.Of(tensor.Float32))
 	defer engine.FreeTensor(a)
-	b := tensor.New(tensor.WithShape(256, 256), tensor.WithEngine(e), tensor.Of(tensor.Float64))
+	b := tensor.New(tensor.WithShape(256, 256), tensor.WithEngine(e), tensor.Of(tensor.Float32))
 	defer engine.FreeTensor(b)
-	c := tensor.New(tensor.WithShape(256, 256), tensor.WithEngine(e), tensor.Of(tensor.Float64))
+	c := tensor.New(tensor.WithShape(256, 256), tensor.WithEngine(e), tensor.Of(tensor.Float32))
 	defer engine.FreeTensor(c)
 
 	fmt.Println(a.Size())
 
-	ad := a.Data().([]float64)
-	dataA := []float64{
+	ad := a.Data().([]float32)
+	dataA := []float32{
 		1, 4, 2,
 		5, 3, 6,
 	}
@@ -64,8 +51,8 @@ func main() {
 	}
 	//a.SetAt()
 
-	bd := b.Data().([]float64)
-	dataB := []float64{
+	bd := b.Data().([]float32)
+	dataB := []float32{
 		10, 20, 30,
 	}
 	for i := range dataB {
